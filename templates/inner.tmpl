@@ -1,0 +1,33 @@
+<div class="main-container">
+    <div class="left">
+        <div class="time-now">
+            {{ .Dt }}
+        </div>
+        <div class="weather-container">
+            <div class="temp">
+                {{ .Temp }}&deg; ({{ .FeelsLike }}&deg;)
+            </div>
+        </div>
+        <div class="weather-desc">
+            <div class="weather-desc-txt">{{ .Description }}</div>
+            <img src="https://openweathermap.org/img/wn/{{ .Icon }}@2x.png"
+              alt="{{ .Description }} icon">
+        </div>
+    </div>
+    <div class="right">
+        <div class="hourly-container">
+        {{range .Hourly}}
+            <div class="hourly">
+              <div class="hourly-txt {{ .Rain }}">
+                {{ .Dt }}: {{ .Temp }}&deg;
+              </div>
+              <div class="hourly-str">
+                {{ .Description }}
+              </div>
+              <div class="hourly-img"><img alt="{{ .Description }} icon"
+                src="https://openweathermap.org/img/wn/{{ .Icon }}.png"></div>
+            </div>
+        {{end}}
+        </div>
+    </div>
+</div>

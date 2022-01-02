@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    {{ template "head" . }}
+    <script language="javascript">
+        function load_weather() {
+            $.ajax({
+                url: "/inner",
+                success: function (result) {
+                    $("body").html(result);
+                },
+            });
+            setTimeout(load_weather, 30 * 1000);
+        }
+    </script>
+  </head>
+
+  <body onload="load_weather()">
+      Loading...
+  </body>
+</html>
