@@ -21,8 +21,7 @@ const (
 	INNER_URL      = "/inner"
 	FAKE_INNER_URL = "/fake-inner"
 
-	// MAX_DATA_AGE  = time.Duration(5) * time.Minute
-	MAX_DATA_AGE  = time.Duration(5) * time.Second
+	MAX_DATA_AGE  = time.Duration(5) * time.Minute
 	HOURS_TO_SHOW = 8
 )
 
@@ -33,11 +32,14 @@ func (w WeatherLengthError) Error() string {
 }
 
 type Config struct {
-	ApiKey   string  `json:"api_key"`
-	Lat      float64 `json:"lat"`
-	Lon      float64 `json:"lon"`
-	Timezone string  `json:"tz"`
-	Units    string  `json:"units"`
+	ApiKey      string  `json:"api_key"`
+	Lat         float64 `json:"lat"`
+	Lon         float64 `json:"lon"`
+	Units       string  `json:"units"`
+	TimezoneStr string  `json:"tz"`
+
+	// Parsed TimezoneStr
+	Timezone *time.Location
 }
 
 type Weather struct {
@@ -94,6 +96,11 @@ func LoadConfig() *Config {
 	if err := json.Unmarshal(jsonBytes, &config); err != nil {
 		panic(err)
 	}
+	tz, err := time.LoadLocation(config.TimezoneStr)
+	if err != nil {
+		panic(err)
+	}
+	config.Timezone = tz
 	log.Printf("Loaded config: %#v", config)
 	return &config
 }
@@ -107,15 +114,19 @@ func (s *Server) State(fakeData bool) *State {
 	if s.isStateExpired() {
 		log.Println("state is expired")
 		var data *Data
+
+		start := time.Now()
 		if fakeData {
 			data = DataFromFile()
 		} else {
 			data = DataFromServer(s.config)
 		}
-		s.state.Update(data)
+		end := time.Now()
+		log.Println("Loaded data server in", end.Sub(start))
+
+		s.state.Update(data, s.config)
 		s.stateExpiration = time.Now().Add(s.maxAge)
-		log.Println("new stateExpiration =", s.stateExpiration)
-		log.Println("NEW STATE =", s.state)
+		log.Println("New state, expires", s.stateExpiration, "=", s.state)
 	} else {
 		log.Println("Using cached state")
 	}
@@ -174,7 +185,6 @@ func DataFromServer(config *Config) *Data {
 	url := fmt.Sprintf(API_URL_FMT, config.Lat, config.Lon, "", config.ApiKey, config.Units)
 	client := http.Client{Timeout: time.Duration(10) * time.Second}
 	log.Println("url =", url)
-
 	res, err := client.Get(url)
 	body, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
@@ -188,11 +198,11 @@ func DataFromServer(config *Config) *Data {
 	return data
 }
 
-func (s *State) Update(data *Data) {
+func (s *State) Update(data *Data, config *Config) {
 	if len(data.Current.Weather) < 1 {
 		panic(WeatherLengthError("data.Current.Weather is empty"))
 	}
-	currentTime := time.Unix(int64(data.Current.Dt), 0)
+	currentTime := time.Unix(int64(data.Current.Dt), 0).In(config.Timezone)
 	s.Temp = math.Round(data.Current.Temp)
 	s.FeelsLike = math.Round(data.Current.FeelsLike)
 	s.Description = data.Current.Weather[0].Description
@@ -210,7 +220,7 @@ func (s *State) Update(data *Data) {
 			break
 		}
 
-		hourlyTime := time.Unix(int64(h.Dt), 0)
+		hourlyTime := time.Unix(int64(h.Dt), 0).In(config.Timezone)
 		if len(data.Current.Weather) < 1 {
 			panic(WeatherLengthError(fmt.Sprintf("data.hourly[%d].Current.Weather is empty", i)))
 		}
