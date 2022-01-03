@@ -111,25 +111,25 @@ func (s *Server) isStateExpired() bool {
 }
 
 func (s *Server) State(fakeData bool) *State {
-	if s.isStateExpired() {
-		log.Println("state is expired")
-		var data *Data
-
-		start := time.Now()
-		if fakeData {
-			data = DataFromFile()
-		} else {
-			data = DataFromServer(s.config)
-		}
-		end := time.Now()
-		log.Println("Loaded data server in", end.Sub(start))
-
-		s.state.Update(data, s.config)
-		s.stateExpiration = time.Now().Add(s.maxAge)
-		log.Println("New state, expires", s.stateExpiration, "=", s.state)
-	} else {
-		log.Println("Using cached state")
+	if !s.isStateExpired() {
+		log.Println("Using cached state good till", s.stateExpiration)
+		return &s.state
 	}
+	log.Println("state is expired")
+	var data *Data
+
+	start := time.Now()
+	if fakeData {
+		data = DataFromFile()
+	} else {
+		data = DataFromServer(s.config)
+	}
+	end := time.Now()
+	log.Println("Loaded data server in", end.Sub(start))
+
+	s.state.Update(data, s.config)
+	s.stateExpiration = time.Now().Add(s.maxAge)
+	log.Println("New state, expires", s.stateExpiration, "=", s.state)
 	return &s.state
 }
 
