@@ -13,17 +13,31 @@ import (
 )
 
 const (
+	API_URL_FMT    = "https://api.openweathermap.org/data/2.5/onecall?lat=%f&lon=%f&exclude=%s&appid=%s&units=%s"
+	CONFIG_FILE    = "config.json"
 	FAKE_DATA_FILE = "testdata.json"
 	CSS_URL        = "static/main.css"
 	FAVICON_URL    = "https://openweathermap.org/img/wn/04d@2x.png"
-	MAX_DATA_AGE   = "5m"
-	HOURS_TO_SHOW  = 8
+	INNER_URL      = "/inner"
+	FAKE_INNER_URL = "/fake-inner"
+
+	// MAX_DATA_AGE  = time.Duration(5) * time.Minute
+	MAX_DATA_AGE  = time.Duration(5) * time.Second
+	HOURS_TO_SHOW = 8
 )
 
 type WeatherLengthError string
 
 func (w WeatherLengthError) Error() string {
 	return fmt.Sprintf("weather length error: %s", string(w))
+}
+
+type Config struct {
+	ApiKey   string  `json:"api_key"`
+	Lat      float64 `json:"lat"`
+	Lon      float64 `json:"lon"`
+	Timezone string  `json:"tz"`
+	Units    string  `json:"units"`
 }
 
 type Weather struct {
@@ -61,41 +75,82 @@ type State struct {
 }
 
 type Server struct {
-	State      State
-	LastLoaded time.Time
+	state           State
+	config          *Config
+	stateExpiration time.Time
+	maxAge          time.Duration
 }
 
-func (s *Server) UpdateState() {
-	maxAge, err := time.ParseDuration(MAX_DATA_AGE)
+func LoadConfig() *Config {
+	config := Config{}
+	fh, err := os.Open(CONFIG_FILE)
 	if err != nil {
 		panic(err)
 	}
-	now := time.Now()
-	if now.Sub(s.LastLoaded) > maxAge {
+	jsonBytes, err := ioutil.ReadAll(fh)
+	if err != nil {
+		panic(err)
 	}
+	if err := json.Unmarshal(jsonBytes, &config); err != nil {
+		panic(err)
+	}
+	log.Printf("Loaded config: %#v", config)
+	return &config
 }
 
-func (s *Server) configHandler(c *gin.Context) {
-	c.JSON(200, gin.H{
-		"fake-data-file": FAKE_DATA_FILE,
-	})
+func (s *Server) isStateExpired() bool {
+	now := time.Now()
+	return now.After(s.stateExpiration)
 }
 
-func (s *Server) fakeHandler(c *gin.Context) {
+func (s *Server) State(fakeData bool) *State {
+	if s.isStateExpired() {
+		log.Println("state is expired")
+		var data *Data
+		if fakeData {
+			data = DataFromFile()
+		} else {
+			data = DataFromServer(s.config)
+		}
+		s.state.Update(data)
+		s.stateExpiration = time.Now().Add(s.maxAge)
+		log.Println("new stateExpiration =", s.stateExpiration)
+		log.Println("NEW STATE =", s.state)
+	} else {
+		log.Println("Using cached state")
+	}
+	return &s.state
+}
+
+func (s *Server) mainHandler(c *gin.Context) {
 	reloaderState := struct {
-		CssUrl  string
-		Favicon string
+		CssUrl   string
+		Favicon  string
+		InnerUrl string
 	}{
-		CSS_URL, FAVICON_URL,
+		CSS_URL, FAVICON_URL, INNER_URL,
 	}
 	c.HTML(http.StatusOK, "reloader.tmpl", reloaderState)
 }
 
-func (s *Server) fakeInner(c *gin.Context) {
-	data := DataFromFile()
-	state := &State{}
-	state.Update(data)
-	log.Printf("state = %#v", *state)
+func (s *Server) innerHandler(c *gin.Context) {
+	state := s.State(false)
+	c.HTML(http.StatusOK, "inner.tmpl", state)
+}
+
+func (s *Server) fakeHandler(c *gin.Context) {
+	reloaderState := struct {
+		CssUrl   string
+		Favicon  string
+		InnerUrl string
+	}{
+		CSS_URL, FAVICON_URL, FAKE_INNER_URL,
+	}
+	c.HTML(http.StatusOK, "reloader.tmpl", reloaderState)
+}
+
+func (s *Server) fakeInnerHandler(c *gin.Context) {
+	state := s.State(true)
 	c.HTML(http.StatusOK, "inner.tmpl", state)
 }
 
@@ -115,6 +170,24 @@ func DataFromFile() *Data {
 	return &data
 }
 
+func DataFromServer(config *Config) *Data {
+	url := fmt.Sprintf(API_URL_FMT, config.Lat, config.Lon, "", config.ApiKey, config.Units)
+	client := http.Client{Timeout: time.Duration(10) * time.Second}
+	log.Println("url =", url)
+
+	res, err := client.Get(url)
+	body, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	if err != nil {
+		panic(err)
+	}
+	data := &Data{}
+	if err := json.Unmarshal(body, &data); err != nil {
+		panic(err)
+	}
+	return data
+}
+
 func (s *State) Update(data *Data) {
 	if len(data.Current.Weather) < 1 {
 		panic(WeatherLengthError("data.Current.Weather is empty"))
@@ -127,6 +200,7 @@ func (s *State) Update(data *Data) {
 	s.Dt = currentTime.Format("Mon 3:04 PM")
 
 	hours := 0
+	s.Hourly = s.Hourly[:0]
 	for i, h := range data.Hourly {
 		if h.Dt <= data.Current.Dt {
 			continue
@@ -152,13 +226,14 @@ func (s *State) Update(data *Data) {
 }
 
 func main() {
-	server := Server{}
+	server := Server{config: LoadConfig(), maxAge: MAX_DATA_AGE}
 	r := gin.Default()
 	r.SetTrustedProxies([]string{})
 	r.LoadHTMLGlob("templates/*.tmpl")
-	r.GET("/config", server.configHandler)
+	r.GET("/", server.mainHandler)
+	r.GET("/inner", server.innerHandler)
 	r.GET("/fake", server.fakeHandler)
-	r.GET("/inner", server.fakeInner)
+	r.GET("/fake-inner", server.fakeInnerHandler)
 	r.Static("/static", "./static")
 	r.Run()
 }

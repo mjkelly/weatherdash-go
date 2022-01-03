@@ -1,0 +1,101 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+
+  /* Yes, this is usually evil -- but accidental selections are a big problem
+   * on the touch screen I'm using. */
+  user-select: none;
+}
+
+body {
+  margin: 0;
+  line-height: 1.4;
+  text-align: center;
+  font-family: Antonio;
+
+  color: #eee;
+  background-color: #03688c;
+}
+
+.rain {
+  background: #6799c7;
+}
+
+.main-container {
+  width: 700px;
+  height: 470px;
+  margin: 0 auto 0 auto;
+}
+
+.weather-container {
+}
+
+.left, .right {
+  display: inline-block;
+  margin: 0;
+  padding: 10px;
+}
+
+.left {
+  float: left;
+  width: 35%;
+}
+
+.right {
+  width: 60%;
+}
+
+.weather-desc {
+  font-size: 36px;
+  text-transform: capitalize;
+}
+
+.weather-desc-txt {
+  margin: auto, 0, auto, 0;
+}
+
+.temp {
+  font-size: 36px;
+}
+
+.time-now {
+  margin: 15px;
+  font-size: 60px;
+}
+
+.hourly-txt {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  font-size: 24px;
+  width: 35%;
+  height: 100%;
+}
+
+.hourly-str {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  font-size: 18px;
+  width: 35%;
+  height: 100%;
+}
+
+.hourly-img {
+  display: inline-block;
+  padding: 0;
+  margin: 0;
+  font-size: 24px;
+}
+
+.hourly img {
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+}
+
+.hourly {
+  width: 100%;
+  height: 55px;
+}
