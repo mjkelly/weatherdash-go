@@ -57,6 +57,9 @@ type Data struct {
 	Timezone string    `json:"timezone"`
 	Current  Weather   `json:"current"`
 	Hourly   []Weather `json:"hourly"`
+
+	// Cache-managemenent metadata
+	CacheKey string
 }
 
 type HourlyState struct {
@@ -68,19 +71,22 @@ type HourlyState struct {
 }
 
 type State struct {
+	// Display state
 	Temp        float64
 	FeelsLike   float64
 	Dt          string
 	Description string
 	Icon        string
 	Hourly      []HourlyState
+
+	// Cache-managemenent metadata
+	Expiration time.Time
+	CacheKey   string
 }
 
 type Server struct {
-	state           State
-	config          *Config
-	stateExpiration time.Time
-	maxAge          time.Duration
+	state  State
+	config *Config
 }
 
 func LoadConfig() *Config {
@@ -105,31 +111,31 @@ func LoadConfig() *Config {
 	return &config
 }
 
-func (s *Server) isStateExpired() bool {
+func (s *Server) isStateExpired(cacheKey string) bool {
 	now := time.Now()
-	return now.After(s.stateExpiration)
+	return now.After(s.state.Expiration) || cacheKey != s.state.CacheKey
 }
 
 func (s *Server) State(fakeData bool) *State {
-	if !s.isStateExpired() {
-		log.Println("Using cached state good till", s.stateExpiration)
+	location := DataLocation(s.config, fakeData)
+	if !s.isStateExpired(location) {
+		log.Printf("Cached state from %s good till %s", location, s.state.Expiration)
 		return &s.state
 	}
 	log.Println("state is expired")
-	var data *Data
 
+	var data *Data
 	start := time.Now()
 	if fakeData {
-		data = DataFromFile()
+		data = DataFromFile(location)
 	} else {
-		data = DataFromServer(s.config)
+		data = DataFromServer(location)
 	}
 	end := time.Now()
 	log.Println("Loaded data server in", end.Sub(start))
 
 	s.state.Update(data, s.config)
-	s.stateExpiration = time.Now().Add(s.maxAge)
-	log.Println("New state, expires", s.stateExpiration, "=", s.state)
+	log.Printf("New state from %s, expires %s = %#v", location, s.state.Expiration, s.state)
 	return &s.state
 }
 
@@ -165,9 +171,17 @@ func (s *Server) fakeInnerHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "inner.tmpl", state)
 }
 
-func DataFromFile() *Data {
-	data := Data{}
-	fh, err := os.Open(FAKE_DATA_FILE)
+func DataLocation(config *Config, fakeData bool) string {
+	if fakeData {
+		return FAKE_DATA_FILE
+	} else {
+		return fmt.Sprintf(API_URL_FMT, config.Lat, config.Lon, "", config.ApiKey, config.Units)
+	}
+}
+
+func DataFromFile(filename string) *Data {
+	data := Data{CacheKey: filename}
+	fh, err := os.Open(filename)
 	if err != nil {
 		panic(err)
 	}
@@ -181,8 +195,7 @@ func DataFromFile() *Data {
 	return &data
 }
 
-func DataFromServer(config *Config) *Data {
-	url := fmt.Sprintf(API_URL_FMT, config.Lat, config.Lon, "", config.ApiKey, config.Units)
+func DataFromServer(url string) *Data {
 	client := http.Client{Timeout: time.Duration(10) * time.Second}
 	log.Println("url =", url)
 	res, err := client.Get(url)
@@ -191,7 +204,7 @@ func DataFromServer(config *Config) *Data {
 	if err != nil {
 		panic(err)
 	}
-	data := &Data{}
+	data := &Data{CacheKey: url}
 	if err := json.Unmarshal(body, &data); err != nil {
 		panic(err)
 	}
@@ -233,10 +246,12 @@ func (s *State) Update(data *Data, config *Config) {
 		}
 		s.Hourly = append(s.Hourly, hourly)
 	}
+	s.Expiration = time.Now().Add(MAX_DATA_AGE)
+	s.CacheKey = data.CacheKey
 }
 
 func main() {
-	server := Server{config: LoadConfig(), maxAge: MAX_DATA_AGE}
+	server := Server{config: LoadConfig()}
 	r := gin.Default()
 	r.SetTrustedProxies([]string{})
 	r.LoadHTMLGlob("templates/*.tmpl")
