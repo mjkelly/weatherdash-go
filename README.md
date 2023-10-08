@@ -19,6 +19,9 @@ screen from Adafruit: <https://www.adafruit.com/product/2260>
 
 ![weatherdash-photo](./weatherdash-photo.jpg)
 
+I also tried to make it look all right on a portrait-mode phone, in case you
+want to use that.
+
 ## Installation
 
 This requires a working [Go](https://golang.org) installation, and GNU Make.

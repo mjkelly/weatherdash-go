@@ -31,6 +31,7 @@ body {
   margin: auto;
 }
 
+
 .weather-container {}
 
 .left, .right {
@@ -41,11 +42,11 @@ body {
 
 .left {
   float: left;
-  width: 35%;
+  width: 40%;
 }
 
 .right {
-  width: 60%;
+  width: 55%;
 }
 
 .weather-desc {
@@ -99,3 +100,18 @@ body {
   width: 25%;
 }
 
+/* This is phone mode. */
+@media(max-width: 699px) {
+  .main-container {
+    width: 100%;
+    display: block;
+    position: inherit;
+  }
+  .hourly-container {
+    width: 100%;
+  }
+  .left, .right {
+    width: 100%;
+    display: block;
+  }
+}
