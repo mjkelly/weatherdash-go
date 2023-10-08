@@ -14,7 +14,7 @@ It's designed to look good on an 800x640 screen. Here's a screenshot:
 
 ![screenshot](./screenshot.png)
 
-Here's a photo of a much older version of weatherdash running on a this
+Here's a photo of a much older version of weatherdash running on this
 screen from Adafruit: <https://www.adafruit.com/product/2260>
 
 ![weatherdash-photo](./weatherdash-photo.jpg)
@@ -27,7 +27,7 @@ Copy `config.json.example` to `config.json` to start. You only _need_ to update
 keys that have a value of `FILL_ME_IN` in `config.json.example`.
 
 _If you just want to see a demo at this point, you can run `make run` and visit
-http://localhost:5000/fake -- that will read fake weather data stored locally.
+http://localhost:8080/fake -- that will read fake weather data stored locally.
 You must have a config.json file, but you need not change it at all._
 
 ### Step 1: Config Setup
