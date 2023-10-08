@@ -3,15 +3,21 @@
   <head>
     {{ template "head" . }}
     <script language="javascript">
-        function load_weather() {
-            $.ajax({
-              url: "{{.InnerUrl}}",
-                success: function (result) {
-                    $("body").html(result);
-                },
-            });
-            setTimeout(load_weather, 30 * 1000);
+      function should_reload() {
+        var params = new URLSearchParams(window.location.search);
+        return params.get('reload') !== 'false';
+      }
+      function load_weather() {
+        $.ajax({
+          url: "{{.InnerUrl}}",
+            success: function (result) {
+              $("body").html(result);
+            },
+        });
+        if (should_reload()) {
+          setTimeout(load_weather, 30 * 1000);
         }
+      }
     </script>
   </head>
 

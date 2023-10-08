@@ -20,16 +20,18 @@ body {
 
 .rain {
   background: #6799c7;
+  border-radius: 2px;
 }
 
 .main-container {
   width: 700px;
   height: 470px;
-  margin: 0 auto 0 auto;
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  margin: auto;
 }
 
-.weather-container {
-}
+.weather-container {}
 
 .left, .right {
   display: inline-block;
@@ -64,38 +66,36 @@ body {
   font-size: 60px;
 }
 
-.hourly-txt {
-  display: inline-block;
-  padding: 0;
-  margin: 0;
-  font-size: 24px;
-  width: 35%;
-  height: 100%;
-}
-
-.hourly-str {
-  display: inline-block;
-  padding: 0;
-  margin: 0;
-  font-size: 18px;
-  width: 35%;
-  height: 100%;
-}
-
-.hourly-img {
-  display: inline-block;
-  padding: 0;
-  margin: 0;
-  font-size: 24px;
-}
-
-.hourly img {
-  display: inline-block;
-  width: 50px;
-  height: 50px;
+.hourly-container {
+  display: table;
+  width: auto;
 }
 
 .hourly {
-  width: 100%;
+  display: table-row;
+  width: auto;
   height: 55px;
+  clear: both;
 }
+
+.hourly-txt, .hourly-str, .hourly-img {
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.hourly-txt {
+  font-size: 24px;
+  width: 35%;
+}
+
+.hourly-str {
+  font-size: 18px;
+  width: 35%;
+}
+
+.hourly-img {
+  font-size: 24px;
+  vertical-align: bottom;
+  width: 25%;
+}
+

@@ -18,7 +18,7 @@
         <div class="hourly-container">
         {{range .Hourly}}
             <div class="hourly">
-              <div class="hourly-txt {{ .Rain }}">
+              <div class="hourly-txt{{ if .Rain }} rain{{ end }}">
                 {{ .Dt }}: {{ .Temp }}&deg;
               </div>
               <div class="hourly-str">
