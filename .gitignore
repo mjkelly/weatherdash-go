@@ -16,3 +16,7 @@
 
 # Config file with secrets
 config.json
+config.json.*
+
+weatherdash-go
+server

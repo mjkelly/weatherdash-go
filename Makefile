@@ -1,6 +1,10 @@
 .PHONY: run
 run: ## Run the server on port 8080
-	go run server.go
+	go build && ./weatherdash-go
+
+.PHONY: clean
+clean: ## Clean up generated files
+	rm -rf weatherdash-go
 
 .PHONY: help
 help:
