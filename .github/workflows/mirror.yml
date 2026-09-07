@@ -1,5 +1,5 @@
 # Updated:
-# Mon Sep  7 12:35:32 PM PDT 2026
+# Tue Sep  8 05:27:03 PM PDT 2026
 name: Mirror Repo
 
 on:
@@ -8,6 +8,12 @@ on:
       - '*'
     tags:
       - '*'
+
+# Allow only one concurrent deployment, skipping runs queued between the run
+# in-progress and latest queued. Do NOT cancel in-progress runs.
+concurrency:
+  group: "${{ github.repository }}:${{ github.workflow }}"
+  cancel-in-progress: false
 
 env:
   DEST_USER: mkelly
