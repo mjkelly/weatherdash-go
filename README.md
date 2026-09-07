@@ -1,12 +1,10 @@
 # weatherdash-go
 
-[![builds.sr.ht status](https://builds.sr.ht/~mkelly/weatherdash-go.svg)](https://builds.sr.ht/~mkelly/weatherdash-go?)
-
 _The canonical location of this repo is:
-<https://git.sr.ht/~mkelly/weatherdash-go>. Other locations are mirrors._
+<https://github.com/mjkelly/weatherdash-go>. Other locations are mirrors._
 
-**Go rewrite of <https://github.com/mjkelly/weatherdash>. This version is more
-maintained (to the extent that I maintain either).**
+**Go rewrite of <https://github.com/mjkelly/weatherdash>. This version is
+better maintained (to the extent that I maintain either).**
 
 This is the server side portion of a weather dashboard for your house, using
 data and icons from <https://openweathermap.org/>.
