@@ -1,5 +1,5 @@
 # Updated:
-# Sun Sep  6 09:52:35 PM PDT 2026
+# Mon Sep  7 12:35:32 PM PDT 2026
 name: Mirror Repo
 
 on:
@@ -17,18 +17,27 @@ jobs:
   mirror_repo:
     runs-on: ubuntu-latest
     steps:
-      - name: Install SSH Key
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: ${{ secrets.CODE_AUTOMATION }}
+      # Set up ssh agent
+      - name: Set Up SSH Key and Agent
+        env:
+          SSH_KEY: ${{ secrets.CODE_AUTOMATION }}
+        run: |
+          eval $(ssh-agent -s)
+          # The tr newline is some paranoia in case the key came from windows
+          # and contains CR+LF line endings.
+          echo "$SSH_KEY" | tr -d '\r' | ssh-add -
+          # Required so later steps can connect to the agent
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
 
       # Add destination to known_hosts to prevent interactive prompts
-      - name: Set known_hosts
+      - name: Update known_hosts
         run: |
+          umask 077
           mkdir -p ~/.ssh
           ssh-keyscan ${DEST_HOST} >> ~/.ssh/known_hosts
 
-      - name: Clone Source Repository Bare
+      - name: Clone Source Repository
         run: git clone --bare "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" repo_mirror
 
       - name: Push Mirror to Target
