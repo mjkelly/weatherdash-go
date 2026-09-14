@@ -3,8 +3,8 @@
 _The canonical location of this repo is:
 <https://github.com/mjkelly/weatherdash-go>. Other locations are mirrors._
 
-**Go rewrite of <https://github.com/mjkelly/weatherdash>. This version is
-better maintained (to the extent that I maintain either).**
+**Go rewrite of <https://github.com/mjkelly/weatherdash>. This version is better
+maintained (to the extent that I maintain either).**
 
 This is the server side portion of a weather dashboard for your house, using
 data and icons from <https://openweathermap.org/>.
@@ -38,13 +38,14 @@ You must have a config.json file, but you need not change it at all._
 
 ### Step 1: Config Setup
 
-1. **API Key:** You need to get your own API key for <https://openweathermap.org/>. Put your
-   API key in the `api_key` field of `config.json`.
-2. **Location:** You have should pick location to get weather for! The default is New York
-   City. You can use <https://www.latlong.net/> for this. The config expects
-   numerical (positive and negative numbers, no north/south or east/west), like
-   this website provides. Put these in the `lat` and `lon` fields of
+1. **API Key:** You need to get your own API key for
+   <https://openweathermap.org/>. Put your API key in the `api_key` field of
    `config.json`.
+2. **Location:** You have should pick location to get weather for! The default
+   is New York City. You can use <https://www.latlong.net/> for this. The config
+   expects numerical (positive and negative numbers, no north/south or
+   east/west), like this website provides. Put these in the `lat` and `lon`
+   fields of `config.json`.
 
 ### Step 2: Run it
 

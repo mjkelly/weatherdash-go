@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -13,13 +13,14 @@ import (
 )
 
 const (
-	API_URL_FMT    = "https://api.openweathermap.org/data/2.5/onecall?lat=%f&lon=%f&exclude=%s&appid=%s&units=%s"
-	CONFIG_FILE    = "config.json"
-	FAKE_DATA_FILE = "testdata.json"
-	CSS_URL        = "static/main.css"
-	FAVICON_URL    = "https://openweathermap.org/img/wn/04d@2x.png"
-	INNER_URL      = "/inner"
-	FAKE_INNER_URL = "/fake-inner"
+	CURRENT_URL_FMT  = "https://api.openweathermap.org/data/2.5/weather?lat=%f&lon=%f&appid=%s&units=%s"
+	FORECAST_URL_FMT = "https://api.openweathermap.org/data/2.5/forecast?lat=%f&lon=%f&appid=%s&units=%s"
+	CONFIG_FILE      = "config.json"
+	FAKE_DATA_FILE   = "testdata.json"
+	CSS_URL          = "static/main.css"
+	FAVICON_URL      = "https://openweathermap.org/img/wn/04d@2x.png"
+	INNER_URL        = "/inner"
+	FAKE_INNER_URL   = "/fake-inner"
 
 	MAX_DATA_AGE  = time.Duration(5) * time.Minute
 	HOURS_TO_SHOW = 8
@@ -42,21 +43,38 @@ type Config struct {
 	Timezone *time.Location
 }
 
+type WeatherCond struct {
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+}
+
 type Weather struct {
-	Dt        int     `json:"dt"`
+	Dt        int                `json:"dt"`
+	Temp      float64            `json:"temp"`
+	FeelsLike float64            `json:"feels_like"`
+	Weather   []WeatherCond      `json:"weather"`
+	Rain      map[string]float64 `json:"rain"`
+}
+
+type owmMain struct {
 	Temp      float64 `json:"temp"`
 	FeelsLike float64 `json:"feels_like"`
-	Weather   []struct {
-		Description string `json:"description"`
-		Icon        string `json:"icon"`
-	} `json:"weather"`
-	Rain map[string]float64 `json:"rain"`
+}
+
+type owmWeather struct {
+	Dt      int                `json:"dt"`
+	Main    owmMain            `json:"main"`
+	Weather []WeatherCond      `json:"weather"`
+	Rain    map[string]float64 `json:"rain"`
+}
+
+type owmForecast struct {
+	List []owmWeather `json:"list"`
 }
 
 type Data struct {
-	Timezone string    `json:"timezone"`
-	Current  Weather   `json:"current"`
-	Hourly   []Weather `json:"hourly"`
+	Current Weather   `json:"current"`
+	Hourly  []Weather `json:"hourly"`
 
 	// Cache-managemenent metadata
 	CacheKey string
@@ -95,7 +113,7 @@ func LoadConfig() *Config {
 	if err != nil {
 		panic(err)
 	}
-	jsonBytes, err := ioutil.ReadAll(fh)
+	jsonBytes, err := io.ReadAll(fh)
 	if err != nil {
 		panic(err)
 	}
@@ -117,7 +135,7 @@ func (s *Server) isStateExpired(cacheKey string) bool {
 }
 
 func (s *Server) State(fakeData bool) *State {
-	location := DataLocation(s.config, fakeData)
+	location := CurrentUrl(s.config, fakeData)
 	if !s.isStateExpired(location) {
 		log.Printf("Cached state from %s good till %s", location, s.state.Expiration)
 		return &s.state
@@ -129,7 +147,7 @@ func (s *Server) State(fakeData bool) *State {
 	if fakeData {
 		data = DataFromFile(location)
 	} else {
-		data = DataFromServer(location)
+		data = DataFromServer(s.config)
 	}
 	end := time.Now()
 	log.Println("Loaded data server in", end.Sub(start))
@@ -171,12 +189,15 @@ func (s *Server) fakeInnerHandler(c *gin.Context) {
 	c.HTML(http.StatusOK, "inner.tmpl", state)
 }
 
-func DataLocation(config *Config, fakeData bool) string {
+func ForecastUrl(config *Config) string {
+	return fmt.Sprintf(FORECAST_URL_FMT, config.Lat, config.Lon, config.ApiKey, config.Units)
+}
+
+func CurrentUrl(config *Config, fakeData bool) string {
 	if fakeData {
 		return FAKE_DATA_FILE
-	} else {
-		return fmt.Sprintf(API_URL_FMT, config.Lat, config.Lon, "", config.ApiKey, config.Units)
 	}
+	return fmt.Sprintf(CURRENT_URL_FMT, config.Lat, config.Lon, config.ApiKey, config.Units)
 }
 
 func DataFromFile(filename string) *Data {
@@ -185,7 +206,7 @@ func DataFromFile(filename string) *Data {
 	if err != nil {
 		panic(err)
 	}
-	jsonBytes, err := ioutil.ReadAll(fh)
+	jsonBytes, err := io.ReadAll(fh)
 	if err != nil {
 		panic(err)
 	}
@@ -195,18 +216,48 @@ func DataFromFile(filename string) *Data {
 	return &data
 }
 
-func DataFromServer(url string) *Data {
+func DataFromServer(config *Config) *Data {
 	client := http.Client{Timeout: time.Duration(10) * time.Second}
-	log.Println("url =", url)
-	res, err := client.Get(url)
-	body, err := ioutil.ReadAll(res.Body)
-	res.Body.Close()
-	if err != nil {
-		panic(err)
+
+	fetch := func(url string, out interface{}) {
+		log.Println("fetch: url =", url)
+		res, err := client.Get(url)
+		if err != nil {
+			panic(err)
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(res.Body)
+		if err != nil {
+			panic(err)
+		}
+		if res.StatusCode != http.StatusOK {
+			panic(fmt.Sprintf("openweathermap returned %s: %s", res.Status, body))
+		}
+		if err := json.Unmarshal(body, out); err != nil {
+			panic(err)
+		}
 	}
-	data := &Data{CacheKey: url}
-	if err := json.Unmarshal(body, &data); err != nil {
-		panic(err)
+
+	current := &owmWeather{}
+	forecast := &owmForecast{}
+	currentUrl := CurrentUrl(config, false)
+	fetch(currentUrl, current)
+	fetch(ForecastUrl(config), forecast)
+
+	data := &Data{CacheKey: currentUrl}
+	data.Current = Weather{
+		Dt:        current.Dt,
+		Temp:      current.Main.Temp,
+		FeelsLike: current.Main.FeelsLike,
+		Weather:   current.Weather,
+	}
+	for _, h := range forecast.List {
+		data.Hourly = append(data.Hourly, Weather{
+			Dt:      h.Dt,
+			Temp:    h.Main.Temp,
+			Weather: h.Weather,
+			Rain:    h.Rain,
+		})
 	}
 	return data
 }
@@ -234,8 +285,8 @@ func (s *State) Update(data *Data, config *Config) {
 		}
 
 		hourlyTime := time.Unix(int64(h.Dt), 0).In(config.Timezone)
-		if len(data.Current.Weather) < 1 {
-			panic(WeatherLengthError(fmt.Sprintf("data.hourly[%d].Current.Weather is empty", i)))
+		if len(h.Weather) < 1 {
+			panic(WeatherLengthError(fmt.Sprintf("data.hourly[%d].Weather is empty", i)))
 		}
 		hourly := HourlyState{
 			Dt:          hourlyTime.Format("3:04 PM"),
