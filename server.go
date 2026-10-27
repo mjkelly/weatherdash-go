@@ -1,9 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
+	"html/template"
 	"io"
 	"log"
 	"math"
@@ -103,8 +104,38 @@ type State struct {
 }
 
 type Server struct {
-	state  State
-	config *Config
+	state     State
+	config    *Config
+	templates *template.Template
+}
+
+// render executes the named template into a buffer first, so a template
+// error produces a clean 500 instead of a partially written 200.
+func (s *Server) render(w http.ResponseWriter, name string, data interface{}) {
+	var buf bytes.Buffer
+	if err := s.templates.ExecuteTemplate(&buf, name, data); err != nil {
+		log.Printf("render %s: %v", name, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = buf.WriteTo(w)
+}
+
+// recoveryMiddleware replaces gin's Recovery: request handlers in this
+// program panic on upstream/data errors, and a panic must become a 500
+// response (bare net/http would just drop the connection).
+func recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("panic serving %s %s: %v", r.Method, r.URL.Path, rec)
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func LoadConfig() *Config {
@@ -157,7 +188,7 @@ func (s *Server) State(fakeData bool) *State {
 	return &s.state
 }
 
-func (s *Server) mainHandler(c *gin.Context) {
+func (s *Server) mainHandler(w http.ResponseWriter, r *http.Request) {
 	reloaderState := struct {
 		CssUrl   string
 		Favicon  string
@@ -165,15 +196,15 @@ func (s *Server) mainHandler(c *gin.Context) {
 	}{
 		CSS_URL, FAVICON_URL, INNER_URL,
 	}
-	c.HTML(http.StatusOK, "reloader.tmpl", reloaderState)
+	s.render(w, "reloader.tmpl", reloaderState)
 }
 
-func (s *Server) innerHandler(c *gin.Context) {
+func (s *Server) innerHandler(w http.ResponseWriter, r *http.Request) {
 	state := s.State(false)
-	c.HTML(http.StatusOK, "inner.tmpl", state)
+	s.render(w, "inner.tmpl", state)
 }
 
-func (s *Server) fakeHandler(c *gin.Context) {
+func (s *Server) fakeHandler(w http.ResponseWriter, r *http.Request) {
 	reloaderState := struct {
 		CssUrl   string
 		Favicon  string
@@ -181,12 +212,12 @@ func (s *Server) fakeHandler(c *gin.Context) {
 	}{
 		CSS_URL, FAVICON_URL, FAKE_INNER_URL,
 	}
-	c.HTML(http.StatusOK, "reloader.tmpl", reloaderState)
+	s.render(w, "reloader.tmpl", reloaderState)
 }
 
-func (s *Server) fakeInnerHandler(c *gin.Context) {
+func (s *Server) fakeInnerHandler(w http.ResponseWriter, r *http.Request) {
 	state := s.State(true)
-	c.HTML(http.StatusOK, "inner.tmpl", state)
+	s.render(w, "inner.tmpl", state)
 }
 
 func ForecastUrl(config *Config) string {
@@ -302,14 +333,25 @@ func (s *State) Update(data *Data, config *Config) {
 }
 
 func main() {
-	server := Server{config: LoadConfig()}
-	r := gin.Default()
-	r.SetTrustedProxies([]string{})
-	r.LoadHTMLGlob("templates/*.tmpl")
-	r.GET("/", server.mainHandler)
-	r.GET("/inner", server.innerHandler)
-	r.GET("/fake", server.fakeHandler)
-	r.GET("/fake-inner", server.fakeInnerHandler)
-	r.Static("/static", "./static")
-	r.Run()
+	server := Server{
+		config:    LoadConfig(),
+		templates: template.Must(template.ParseGlob("templates/*.tmpl")),
+	}
+
+	mux := http.NewServeMux()
+	// "GET /{$}" matches only the exact root path; plain "GET /" would be
+	// a catch-all subtree and swallow paths that must 404.
+	mux.HandleFunc("GET /{$}", server.mainHandler)
+	mux.HandleFunc("GET /inner", server.innerHandler)
+	mux.HandleFunc("GET /fake", server.fakeHandler)
+	mux.HandleFunc("GET /fake-inner", server.fakeInnerHandler)
+	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
+	// Preserve gin's Run() behaviour: $PORT if set, else :8080.
+	addr := ":8080"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
+	log.Printf("Listening on %s", addr)
+	log.Fatal(http.ListenAndServe(addr, recoveryMiddleware(mux)))
 }

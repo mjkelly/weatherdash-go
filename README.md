@@ -53,6 +53,8 @@ Run `make` in this directory to build and run the server. It'll listen on port
 8080. Go to `<your-ip-address>:8080` to have a look. If you're building this on
 your local machine, that's `http://localhost:8080`
 
+To run on a different port, set `$PORT`, e.g.: `PORT=8081 make`
+
 ## Debugging
 
 If you're debugging the layout, add `?reload=false` to the URL to skip the
